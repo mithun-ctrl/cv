@@ -1,87 +1,53 @@
 import os
-import random
-import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import Updater, CommandHandler
+from jikanpy import Jikan
 from dotenv import load_dotenv
-
-# Load environment variables from .env file
 load_dotenv()
 
-# Access the token from the environment variable
-TELEGRAM_BOT_TOKEN = os.getenv('TOKEN')
+# Replace 'YOUR_BOT_TOKEN' with the API token provided by the BotFather
+BOT_TOKEN = os.getenv("TOKEN")
 
-# AniList API query function to get a random anime frame
-def fetch_random_frame():
-    query = '''
-    query ($page: Int, $perPage: Int) {
-      Page(page: $page, perPage: $perPage) {
-        media(type: ANIME, format: TV) {
-          title {
-            english
-            romaji
-          }
-          coverImage {
-            extraLarge
-          }
-          startDate {
-            year
-          }
-          genres
-        }
-      }
-    }
-    '''
-    variables = {
-        'page': random.randint(1, 50),  # Random page to vary results
-        'perPage': 1  # Get one anime per query for simplicity
-    }
+# Initialize the Jikan API client
+jikan = Jikan()
 
-    url = 'https://graphql.anilist.co'
-    response = requests.post(url, json={'query': query, 'variables': variables})
-    data = response.json()
-    
-    if 'errors' in data:
-        return None
-    
-    anime = data['data']['Page']['media'][0]
-    title = anime['title']['english'] or anime['title']['romaji']
-    frame_url = anime['coverImage']['extraLarge']
-    year = anime['startDate']['year']
-    genre = ', '.join(anime['genres'])
-    
-    # Return structured frame data
-    return {
-        "title": title,
-        "frame_url": frame_url,
-        "year": year,
-        "genre": genre
-    }
+# Keep track of posted characters
+posted_characters = []
 
-# Asynchronous command handler to fetch and send an anime frame
-async def post_frame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    frame = fetch_random_frame()
-    if frame:
-        message = f"*Title*: {frame['title']}\n*Year*: {frame['year']}\n*Genre*: {frame['genre']}"
-        await update.message.reply_photo(photo=frame['frame_url'], caption=message, parse_mode="Markdown")
-    else:
-        await update.message.reply_text("Failed to fetch frame. Please try again later.")
+def post_anime_character(update, context):
+    """
+    Handles the /post command to post a random anime character image.
+    """
+    # Fetch a random anime character from the Jikan API
+    character = jikan.random_character()['data']
 
-# Set up the bot and command handler
-def main():
-    if TELEGRAM_BOT_TOKEN is None:
-        print("Error: TELEGRAM_BOT_TOKEN is not set in the .env file.")
+    # Check if the character has been posted before
+    if character['mal_id'] in posted_characters:
+        context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I can't post the same character again!")
         return
 
-    # Initialize the Application instance with the bot token
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    # Post the character's image
+    context.bot.send_photo(chat_id=update.effective_chat.id, photo=character['image_url'])
 
-    # Register the command handler for /post
-    app.add_handler(CommandHandler("post", post_frame))
+    # Add the character to the posted_characters list
+    posted_characters.append(character['mal_id'])
 
-    # Run the bot with polling
-    print("Bot is starting...")
-    app.run_polling()
+    # Limit the list to the last 100 posted characters
+    if len(posted_characters) > 100:
+        posted_characters.pop(0)
+
+def main():
+    """
+    Main function to set up and run the Telegram bot.
+    """
+    updater = Updater(token=BOT_TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
+
+    # Register the /post command handler
+    dispatcher.add_handler(CommandHandler('post', post_anime_character))
+
+    # Start the bot
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == '__main__':
     main()

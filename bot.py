@@ -1,6 +1,4 @@
 from dotenv import load_dotenv
-
-
 import os
 from telegram.ext import Updater, CommandHandler
 from jikanpy import Jikan
@@ -19,7 +17,8 @@ def post_anime_character(update, context):
     Handles the /post command to post a random anime character image.
     """
     # Fetch a random anime character from the Jikan API
-    character = jikan.random_character()['data']
+    response = jikan.random_anime()
+    character = response['data']
 
     # Check if the character has been posted before
     if character['mal_id'] in posted_characters:
@@ -27,7 +26,7 @@ def post_anime_character(update, context):
         return
 
     # Post the character's image
-    context.bot.send_photo(chat_id=update.effective_chat.id, photo=character['image_url'])
+    context.bot.send_photo(chat_id=update.effective_chat.id, photo=character['images']['jpg']['image_url'])
 
     # Add the character to the posted_characters list
     posted_characters.append(character['mal_id'])

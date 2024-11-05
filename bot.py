@@ -1,7 +1,6 @@
 import os
 import random
 import requests
-import json
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from dotenv import load_dotenv
@@ -10,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Access the token from the environment variable
-TELEGRAM_BOT_TOKEN = os.getenv("TOKEN")
+TELEGRAM_BOT_TOKEN = os.getenv('TOKEN')
 
 # AniList API query function to get a random anime frame
 def fetch_random_frame():
@@ -68,24 +67,21 @@ async def post_frame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     else:
         await update.message.reply_text("Failed to fetch frame. Please try again later.")
 
-# Main function to set up the bot
-async def main():
+# Set up the bot and command handler
+def main():
     if TELEGRAM_BOT_TOKEN is None:
         print("Error: TELEGRAM_BOT_TOKEN is not set in the .env file.")
         return
 
-    # Create the Application instance with the bot token
+    # Initialize the Application instance with the bot token
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
     # Register the command handler for /post
     app.add_handler(CommandHandler("post", post_frame))
 
-    # Start the bot
+    # Run the bot with polling
     print("Bot is starting...")
-    await app.start()
-    await app.updater.start_polling()
-    await app.idle()
+    app.run_polling()
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+    main()

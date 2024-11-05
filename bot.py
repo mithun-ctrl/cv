@@ -1,11 +1,12 @@
+from dotenv import load_dotenv
+
+
 import os
 from telegram.ext import Updater, CommandHandler
 from jikanpy import Jikan
-from dotenv import load_dotenv
 load_dotenv()
-
 # Replace 'YOUR_BOT_TOKEN' with the API token provided by the BotFather
-BOT_TOKEN = 'TOKEN'
+BOT_TOKEN = os.getenv('TOKEN')
 
 # Initialize the Jikan API client
 jikan = Jikan()
@@ -39,7 +40,7 @@ def main():
     """
     Main function to set up and run the Telegram bot.
     """
-    updater = Updater(BOT_TOKEN, use_context=True)
+    updater = Updater(BOT_TOKEN)
     dispatcher = updater.dispatcher
 
     # Register the /post command handler

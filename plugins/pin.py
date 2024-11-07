@@ -1,73 +1,117 @@
+import logging
 from pyrogram import Client, filters
 from pyrogram.types import Message
+from pyrogram.errors import PinMessageError
 
 from config import BOT_OWNER
 
+logger = logging.getLogger(__name__)
+
 # Helper function to check if a user is an admin or the group owner
 async def is_admin_or_owner(message: Message):
-    chat_id = message.chat.id
-    user_id = message.from_user.id
-    
-    # Check if the user is an admin
-    status = await message.chat.get_member(user_id)
-    if status.status in ["administrator", "creator"]:
-        return True
-    
-    # Check if the user is the bot owner
-    if user_id == int(BOT_OWNER):
-        return True
-    
-    return False
+    try:
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        # Check if the user is an admin
+        status = await message.chat.get_member(user_id)
+        if status.status in ["administrator", "creator"]:
+            return True
+        
+        # Check if the user is the bot owner
+        if user_id == int(BOT_OWNER):
+            return True
+        
+        return False
+    except Exception as e:
+        logger.error(f"Error checking admin status: {str(e)}")
+        return False
 
 # Callback handler for the "Pin" button
 @Client.on_callback_query(filters.regex("^pin$"))
 async def pin_button_callback(client, callback_query):
-    pin_text = """
-/pin - Silently pins the message that was replied to.
-You can add the word 'loud' or 'notify' to the command to make the bot send a notification when pinning the message.
+    try:
+        pin_text = """
+📌 **Pin Commands**
 
-/unpin - Unpins the currently pinned message.
+• /pin - Silently pins the message
+  Add 'loud' or 'notify' for notification
 
-/pinned - Retrieves the currently pinned message and sends it back.
-    """
-    await callback_query.message.edit_text(pin_text)
+• /unpin - Unpins the current message
+
+• /pinned - Shows the pinned message
+        """
+        await callback_query.message.edit_text(
+            pin_text,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Back", callback_data="help")
+            ]])
+        )
+    except Exception as e:
+        logger.error(f"Error in pin button callback: {str(e)}")
+        await callback_query.answer("An error occurred.", show_alert=True)
 
 # /pin command
 @Client.on_message(filters.command("pin") & filters.group)
 async def pin_message(client, message: Message):
-    if not await is_admin_or_owner(message):
-        return
+    try:
+        if not message.reply_to_message:
+            await message.reply("Please reply to a message to pin it!")
+            return
 
-    # Parse the optional 'loud' or 'notify' parameter
-    is_loud = 'loud' in message.text.lower()
-    is_notify = 'notify' in message.text.lower()
+        if not await is_admin_or_owner(message):
+            await message.reply("You must be an admin to use this command!")
+            return
 
-    # Pin the message
-    await message.pin(disable_notification=not is_loud)
+        # Parse the optional 'loud' or 'notify' parameter
+        is_loud = 'loud' in message.text.lower() or 'notify' in message.text.lower()
 
-    # Send a notification if 'notify' is specified
-    if is_notify:
-        await message.reply("The message has been pinned.")
+        # Pin the message
+        await message.reply_to_message.pin(disable_notification=not is_loud)
+        logger.info(f"Message pinned in chat {message.chat.id} by user {message.from_user.id}")
+
+        if is_loud:
+            await message.reply("Message has been pinned!")
+
+    except PinMessageError as e:
+        logger.error(f"Error pinning message: {str(e)}")
+        await message.reply("Failed to pin message. Make sure I have the correct permissions.")
+    except Exception as e:
+        logger.error(f"Error in pin command: {str(e)}")
+        await message.reply("An error occurred while pinning the message.")
 
 # /unpin command
 @Client.on_message(filters.command("unpin") & filters.group)
 async def unpin_message(client, message: Message):
-    if not await is_admin_or_owner(message):
-        return
+    try:
+        if not await is_admin_or_owner(message):
+            await message.reply("You must be an admin to use this command!")
+            return
 
-    # Unpin the message
-    await message.unpin()
-    await message.reply("The pinned message has been unpinned.")
+        # Unpin the message
+        await client.unpin_chat_message(message.chat.id)
+        logger.info(f"Message unpinned in chat {message.chat.id} by user {message.from_user.id}")
+        await message.reply("Message has been unpinned!")
+
+    except Exception as e:
+        logger.error(f"Error in unpin command: {str(e)}")
+        await message.reply("Failed to unpin message. Make sure I have the correct permissions.")
 
 # /pinned command
 @Client.on_message(filters.command("pinned") & filters.group)
 async def get_pinned_message(client, message: Message):
-    if not await is_admin_or_owner(message):
-        return
+    try:
+        if not await is_admin_or_owner(message):
+            await message.reply("You must be an admin to use this command!")
+            return
 
-    # Get the pinned message
-    pinned_message = await message.chat.get_pinned_message()
-    if pinned_message:
-        await message.reply(f"The currently pinned message is:\n{pinned_message.text}")
-    else:
-        await message.reply("There is no pinned message in this chat.")
+        # Get the pinned message
+        pinned_message = await message.chat.get_pinned_message()
+        if pinned_message:
+            await message.reply(f"📌 Currently pinned message:\n\n{pinned_message.text}")
+        else:
+            await message.reply("There are no pinned messages in this chat!")
+
+    except Exception as e:
+        logger.error(f"Error in pinned command: {str(e)}")
+        await message.reply("An error occurred while fetching the pinned message.")
